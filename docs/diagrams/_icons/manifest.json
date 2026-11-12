@@ -1,0 +1,46 @@
+{
+  "aspnet": {
+    "source": "gilbarbara",
+    "url": "https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/dotnet.svg",
+    "file": "aspnet.svg",
+    "bytes": 3071
+  },
+  "nextjs": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/nextjs_icon_dark.svg",
+    "file": "nextjs.svg",
+    "bytes": 1091
+  },
+  "typescript": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/typescript.svg",
+    "file": "typescript.svg",
+    "bytes": 1744
+  },
+  "postgresql": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/postgresql.svg",
+    "file": "postgresql.svg",
+    "bytes": 3944
+  },
+  "efcore": {
+    "source": "gilbarbara",
+    "url": "https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/dotnet.svg",
+    "file": "efcore.svg",
+    "bytes": 3071
+  },
+  "openai": {
+    "source": "svgl",
+    "url": "https://svgl.app/library/openai.svg",
+    "file": "openai.svg",
+    "bytes": 2430,
+    "dark_file": "openai_dark.svg",
+    "dark_url": "https://svgl.app/library/openai_dark.svg"
+  },
+  "lucide": {
+    "source": "gilbarbara",
+    "url": "https://cdn.jsdelivr.net/gh/gilbarbara/logos/logos/box.svg",
+    "file": "lucide.svg",
+    "bytes": 2282
+  }
+}

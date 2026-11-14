@@ -1,22 +1,48 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.IO.Pipelines;
 using TeamTaskManager.Api.Data;
 using TeamTaskManager.Api.Models;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
 
 namespace TeamTaskManager.Api.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext
+    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
     }
-
+    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
 
     public DbSet<Project> Projects => Set<Project>();
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<ProjectMember>()
+            .HasIndex(x => new { x.ProjectId, x.UserId })
+            .IsUnique();
+
+        builder.Entity<ProjectMember>()
+            .HasOne(x => x.Project)
+            .WithMany(x => x.Members)
+            .HasForeignKey(x => x.ProjectId);
+
+        builder.Entity<ProjectMember>()
+            .HasOne(x => x.User)
+            .WithMany(x => x.ProjectMemberships)
+            .HasForeignKey(x => x.UserId);
+    }
+
 }
 
 

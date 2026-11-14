@@ -1,12 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using TeamTaskManager.Api.Data;
-
+using Microsoft.AspNetCore.Identity;
+using TeamTaskManager.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services
+    .AddIdentityCore<ApplicationUser>()
+    .AddRoles<IdentityRole<Guid>>()
+    .AddEntityFrameworkStores<AppDbContext>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(

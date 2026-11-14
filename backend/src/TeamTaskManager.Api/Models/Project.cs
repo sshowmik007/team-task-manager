@@ -11,5 +11,8 @@
         public Guid WorkspaceId { get; set; }
 
         public Workspace? Workspace { get; set; }
+
+        public ICollection<ProjectMember> Members { get; set; }
+            = new List<ProjectMember>();
     }
 }

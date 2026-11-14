@@ -1,12 +1,21 @@
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO.Pipelines;
+using System.Reflection.Emit;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using TeamTaskManager.Api.Data;
 using TeamTaskManager.Api.Models;
+using static Npgsql.Replication.PgOutput.Messages.RelationMessage;
+using static System.Net.Mime.MediaTypeNames;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 
@@ -23,6 +32,12 @@ public class AppDbContext
     public DbSet<Workspace> Workspaces => Set<Workspace>();
 
     public DbSet<Project> Projects => Set<Project>();
+
+    public DbSet<TaskItem> TaskItems => Set<TaskItem>();
+
+    public DbSet<Comment> Comments => Set<Comment>();
+
+    public DbSet<Label> Labels => Set<Label>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -41,6 +56,155 @@ public class AppDbContext
             .HasOne(x => x.User)
             .WithMany(x => x.ProjectMemberships)
             .HasForeignKey(x => x.UserId);
+
+        builder.Entity<TaskItem>().
+            HasOne(x => x.Project)
+            .WithMany(x => x.Tasks)
+            .HasForeignKey(x => x.ProjectId);
+
+        builder.Entity<TaskItem>()
+            .HasOne(x => x.Assignee)
+            .WithMany(x => x.AssignedTasks)
+            .HasForeignKey(x => x.AssigneeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TaskItem>()
+            .HasOne(x => x.CreatedBy)
+            .WithMany(x => x.CreatedTasks)
+            .HasForeignKey(x => x.CreatedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Comment>()
+            .HasOne(x => x.TaskItem)
+            .WithMany(x => x.Comments)
+            .HasForeignKey(x => x.TaskItemId);
+
+        builder.Entity<Comment>()
+            .HasOne(x => x.Author)
+            .WithMany(x => x.Comments)
+            .HasForeignKey(x => x.AuthorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Label>()
+            .HasOne(x => x.Project)
+            .WithMany(x => x.Labels)
+            .HasForeignKey(x => x.ProjectId);
+
+        builder.Entity<Label>()
+            .HasIndex(x => new { x.ProjectId, x.Name })
+            .IsUnique();
+
+        builder.Entity<TaskItem>()
+            .HasMany(x => x.Labels)
+            .WithMany(x => x.Tasks);
+
+        builder.Entity<Workspace>(entity =>
+        {
+            entity.Property(x => x.Name)
+                .HasMaxLength(150)
+                .IsRequired();
+        });
+
+        builder.Entity<Project>(entity =>
+        {
+            entity.Property(x => x.Name)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(2000);
+        });
+
+        builder.Entity<TaskItem>(entity =>
+        {
+            entity.Property(x => x.Title)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(x => x.Description)
+                .HasMaxLength(4000);
+
+            entity.HasIndex(x => x.ProjectId);
+
+            entity.HasIndex(x => x.AssigneeId);
+
+            entity.HasIndex(x => x.Status);
+        });
+
+        builder.Entity<Comment>(entity =>
+        {
+            entity.Property(x => x.Body)
+                .HasMaxLength(4000)
+                .IsRequired();
+
+            entity.HasIndex(x => x.TaskItemId);
+        });
+
+        builder.Entity<Label>(entity =>
+        {
+            entity.Property(x => x.Name)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.HasIndex(x => new
+            {
+                x.ProjectId,
+                x.Name
+            })
+            .IsUnique();
+        });
+
+        builder.Entity<TaskItem>()
+            .HasOne(x => x.Project)
+            .WithMany(x => x.Tasks)
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Comment>()
+            .HasOne(x => x.TaskItem)
+            .WithMany(x => x.Comments)
+            .HasForeignKey(x => x.TaskItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<TaskItem>()
+            .HasOne(x => x.Assignee)
+            .WithMany(x => x.AssignedTasks)
+            .HasForeignKey(x => x.AssigneeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TaskItem>()
+            .HasOne(x => x.CreatedBy)
+            .WithMany(x => x.CreatedTasks)
+            .HasForeignKey(x => x.CreatedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<Comment>()
+            .HasOne(x => x.Author)
+            .WithMany(x => x.Comments)
+            .HasForeignKey(x => x.AuthorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<ProjectMember>()
+            .HasOne(x => x.Project)
+            .WithMany(x => x.Members)
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        builder.Entity<ProjectMember>()
+            .HasOne(x => x.User)
+            .WithMany(x => x.ProjectMemberships)
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<ProjectMember>()
+            .HasIndex(x => new
+            {
+                x.ProjectId,
+                x.UserId
+            })
+            .IsUnique();
+
+
     }
 
 }
@@ -68,3 +232,89 @@ public class AppDbContext
 //```
 
 //When you configure `AddDbContext` in `Program.cs`, ASP.NET Core packages up that `UseSqlServer(...)` configuration into a `DbContextOptions<AppDbContext>` object and automatically injects it into the constructor you asked about whenever a controller or service requests `AppDbContext`.
+
+
+//This code is an** Entity Framework Core(EF Core) `DbContext**`, which acts as the bridge between your C# classes (models) and your database tables.
+
+//Inside the `OnModelCreating` method, you are using the ** Fluent API** to define the exact rules, relationships, and constraints for how your database tables should be built.
+
+//Here is a breakdown of what those terms and methods mean, from the ground up.
+
+//---
+
+//### 1. The Basics (`DbSet` and `OnModelCreating`)
+
+//* **`public DbSet<Project> Projects => Set<Project>();`**: This tells EF Core, *"Create a database table named `Projects` based on my `Project` C# class."* Each `DbSet` represents a table.
+//***`protected override void OnModelCreating(ModelBuilder builder)`**: This method runs when EF Core is figuring out the database structure.You use `builder.Entity<T>()` to configure specific rules for a table.
+
+//---
+
+//### 2. Relationships (`HasOne`, `WithMany`, `HasForeignKey`)
+
+//Relational databases connect tables together.In EF Core, you always describe a relationship from **both sides**.
+
+//Take this block from your code as an example:
+
+//```csharp
+//builder.Entity<TaskItem>()
+//    .HasOne(x => x.Project)       // Side A: A TaskItem belongs to ONE Project
+//    .WithMany(x => x.Tasks)       // Side B: A Project can have MANY TaskItems
+//    .HasForeignKey(x => x.ProjectId); // The glue: The column in TaskItems that stores the Project's ID
+
+//```
+
+//***`HasOne(...)`**: Defines the "one" side of a relationship.A single `TaskItem` only lives inside one `Project`.
+//* **`WithMany(...)`**: Defines the "many" side.A single `Project` contains a list/collection of many `TaskItem`s. * (Note: `HasMany` + `WithMany` is also used in your code for `TaskItem` and `Label`—meaning a task can have many labels, and a label can be attached to many tasks).*
+//***`HasForeignKey(...)`**: A** Foreign Key** is a column in one table that points to the Primary Key(ID) of another table.Here, the `TaskItems` table has a `ProjectId` column to remember which project it belongs to.
+
+//---
+
+//### 3. Deletion Rules (`OnDelete`)
+
+//When you delete a record that other records depend on, the database needs to know what to do with the "orphaned" data.
+
+//***`DeleteBehavior.Cascade`**: *"If the parent is deleted, automatically delete the children too."*
+//* **Example in your code:** If you delete a `Project`, EF Core will automatically delete all `TaskItem`s inside that project.
+
+
+//* **`DeleteBehavior.Restrict`**: *"Block the deletion if children still exist."*
+//* **Example in your code:** `TaskItem` has `OnDelete(DeleteBehavior.Restrict)` for `Assignee` (a User). If you try to delete a User from the database who still has tasks assigned to them, the database will throw an error and prevent you from deleting the user until you reassign or delete their tasks first.
+
+
+
+//---
+
+//### 4. Data Rules & Performance (`IsRequired`, `HasMaxLength`, `HasIndex`, `IsUnique`)
+
+//```csharp
+//builder.Entity<Label>(entity =>
+//{
+//    entity.Property(x => x.Name)
+//        .HasMaxLength(50)
+//        .IsRequired();
+
+//    entity.HasIndex(x => new { x.ProjectId, x.Name })
+//        .IsUnique();
+//});
+
+//```
+
+//***`IsRequired()`**: Makes the database column `NOT NULL`. You cannot save a `Label` without giving it a `Name`.
+//***`HasMaxLength(50)`**: Limits the text column(e.g., `VARCHAR(50)` or `NVARCHAR(50)`) to 50 characters to save space and enforce validation.
+//***`HasIndex(...)`**: Creates a database index(like the index at the back of a textbook). It makes searching and filtering by that column(like `ProjectId` or `Status`) drastically faster.
+//* **`IsUnique()`**: Prevents duplicate values.In your `ProjectMember` table:
+//```csharp
+//.HasIndex(x => new { x.ProjectId, x.UserId }).IsUnique();
+
+//```
+
+
+//This creates a **Composite Unique Index**. It ensures that the same `UserId` cannot be added to the same `ProjectId` twice (preventing duplicate memberships), while still allowing that user to join *other* projects.
+
+//---
+
+//### Quick Tip on Your Code
+
+//Notice that in your `OnModelCreating` method, several configurations are written **twice** (for example, `TaskItem` -> `Project`, `TaskItem` -> `Assignee`, `Comment` -> `Author`, and `ProjectMember` are configured near the top, and then configured again at the bottom with `.OnDelete(...)` added).
+
+//EF Core won't crash—the bottom configurations will just overwrite the top ones—but you can safely delete the duplicate blocks at the top to keep your file clean and easy to read.

@@ -22,6 +22,21 @@ namespace TeamTaskManager.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("LabelTaskItem", b =>
+                {
+                    b.Property<Guid>("LabelsId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TasksId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("LabelsId", "TasksId");
+
+                    b.HasIndex("TasksId");
+
+                    b.ToTable("LabelTaskItem");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -220,6 +235,60 @@ namespace TeamTaskManager.Api.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("TeamTaskManager.Api.Models.Comment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("TaskItemId");
+
+                    b.ToTable("Comments");
+                });
+
+            modelBuilder.Entity("TeamTaskManager.Api.Models.Label", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Labels");
+                });
+
             modelBuilder.Entity("TeamTaskManager.Api.Models.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -227,11 +296,13 @@ namespace TeamTaskManager.Api.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text");
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid");
@@ -271,6 +342,52 @@ namespace TeamTaskManager.Api.Migrations
                     b.ToTable("ProjectMembers");
                 });
 
+            modelBuilder.Entity("TeamTaskManager.Api.Models.TaskItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssigneeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("ModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssigneeId");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("TaskItems");
+                });
+
             modelBuilder.Entity("TeamTaskManager.Api.Models.Workspace", b =>
                 {
                     b.Property<Guid>("Id")
@@ -279,11 +396,27 @@ namespace TeamTaskManager.Api.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.HasKey("Id");
 
                     b.ToTable("Workspaces");
+                });
+
+            modelBuilder.Entity("LabelTaskItem", b =>
+                {
+                    b.HasOne("TeamTaskManager.Api.Models.Label", null)
+                        .WithMany()
+                        .HasForeignKey("LabelsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TeamTaskManager.Api.Models.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("TasksId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -337,6 +470,36 @@ namespace TeamTaskManager.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TeamTaskManager.Api.Models.Comment", b =>
+                {
+                    b.HasOne("TeamTaskManager.Api.Models.ApplicationUser", "Author")
+                        .WithMany("Comments")
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TeamTaskManager.Api.Models.TaskItem", "TaskItem")
+                        .WithMany("Comments")
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("TaskItem");
+                });
+
+            modelBuilder.Entity("TeamTaskManager.Api.Models.Label", b =>
+                {
+                    b.HasOne("TeamTaskManager.Api.Models.Project", "Project")
+                        .WithMany("Labels")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("TeamTaskManager.Api.Models.Project", b =>
                 {
                     b.HasOne("TeamTaskManager.Api.Models.Workspace", "Workspace")
@@ -359,7 +522,7 @@ namespace TeamTaskManager.Api.Migrations
                     b.HasOne("TeamTaskManager.Api.Models.ApplicationUser", "User")
                         .WithMany("ProjectMemberships")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Project");
@@ -367,14 +530,55 @@ namespace TeamTaskManager.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TeamTaskManager.Api.Models.TaskItem", b =>
+                {
+                    b.HasOne("TeamTaskManager.Api.Models.ApplicationUser", "Assignee")
+                        .WithMany("AssignedTasks")
+                        .HasForeignKey("AssigneeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("TeamTaskManager.Api.Models.ApplicationUser", "CreatedBy")
+                        .WithMany("CreatedTasks")
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TeamTaskManager.Api.Models.Project", "Project")
+                        .WithMany("Tasks")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Assignee");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("TeamTaskManager.Api.Models.ApplicationUser", b =>
                 {
+                    b.Navigation("AssignedTasks");
+
+                    b.Navigation("Comments");
+
+                    b.Navigation("CreatedTasks");
+
                     b.Navigation("ProjectMemberships");
                 });
 
             modelBuilder.Entity("TeamTaskManager.Api.Models.Project", b =>
                 {
+                    b.Navigation("Labels");
+
                     b.Navigation("Members");
+
+                    b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("TeamTaskManager.Api.Models.TaskItem", b =>
+                {
+                    b.Navigation("Comments");
                 });
 
             modelBuilder.Entity("TeamTaskManager.Api.Models.Workspace", b =>

@@ -14,5 +14,11 @@
 
         public ICollection<ProjectMember> Members { get; set; }
             = new List<ProjectMember>();
+
+        public ICollection<TaskItem> Tasks { get; set; }
+            = new List<TaskItem>();
+
+        public ICollection<Label> Labels { get; set; }
+            = new List<Label>();
     }
 }

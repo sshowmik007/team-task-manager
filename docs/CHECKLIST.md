@@ -87,6 +87,8 @@ Workspace
 
 - [x] Fixed EF migration command/project-path issue
 - [x] Fixed `Workspace` namespace/type resolution error
+- [x] Fixed `IdentityDbContext<,,>` namespace resolution in `AppDbContext.cs`
+- [x] Aligned EF Core package versions (`8.0.11`) to eliminate `MSB3277` warning
 - [x] Rebuilt successfully after fixes
 - [x] Application ran successfully after fixes
 
@@ -108,18 +110,18 @@ Completed inside Phase 1:
 
 Still required for Phase 1:
 
-- [ ] User / Identity model decision
-- [ ] ProjectMember
-- [ ] ProjectRole
-- [ ] TaskItem
-- [ ] Comment
-- [ ] Label
-- [ ] Remaining entity relationships
-- [ ] Unique constraints
-- [ ] Useful indexes
-- [ ] Delete behaviors
-- [ ] String length configuration
-- [ ] Review generated migrations
+- [x] User / Identity model decision
+- [x] ProjectMember
+- [x] ProjectRole
+- [x] TaskItem
+- [x] Comment
+- [x] Label
+- [x] Remaining entity relationships
+- [x] Unique constraints
+- [x] Useful indexes
+- [x] Delete behaviors
+- [x] String length configuration
+- [x] Review generated migrations
 - [ ] Inspect database tables manually
 
 ---
@@ -130,21 +132,21 @@ Still required for Phase 1:
 
 Next tasks:
 
-- [ ] Decide how `User` will integrate with ASP.NET Core Identity
-- [ ] Create `ProjectMember`
-- [ ] Create `ProjectRole`
-- [ ] Connect `User` to `ProjectMember`
-- [ ] Connect `Project` to `ProjectMember`
-- [ ] Configure many-to-many relationship through `ProjectMember`
-- [ ] Add unique constraint:
+- [x] Decide how `User` will integrate with ASP.NET Core Identity
+- [x] Create `ProjectMember`
+- [x] Create `ProjectRole`
+- [x] Connect `User` to `ProjectMember`
+- [x] Connect `Project` to `ProjectMember`
+- [x] Configure many-to-many relationship through `ProjectMember`
+- [x] Add unique constraint:
 
 ```text
 (ProjectId, UserId)
 ```
 
-- [ ] Create next migration
-- [ ] Apply migration
-- [ ] Inspect resulting database schema
+- [x] Create next migration
+- [x] Apply migration
+- [x] Inspect resulting database schema
 
 Target mental model:
 
@@ -164,7 +166,7 @@ Project
 
 ### Authentication
 
-- [ ] ASP.NET Core Identity integration
+- [x] ASP.NET Core Identity integration
 - [ ] Register
 - [ ] Login
 - [ ] Password hashing flow
@@ -183,18 +185,18 @@ Project
 
 ### Tasks
 
-- [ ] TaskItem model
+- [x] TaskItem model
 - [ ] Create task
 - [ ] Get task
 - [ ] List tasks
 - [ ] Update task
 - [ ] Delete task
-- [ ] Task status
-- [ ] Task assignee
+- [x] Task status
+- [x] Task assignee
 
 ### Comments
 
-- [ ] Comment model
+- [x] Comment model
 - [ ] Add comment
 - [ ] List comments
 - [ ] Update comment
@@ -202,10 +204,10 @@ Project
 
 ### Labels
 
-- [ ] Label model
+- [x] Label model
 - [ ] Create label
 - [ ] List labels
-- [ ] Attach label to task
+- [x] Attach label to task
 - [ ] Remove label from task
 
 ### Query Features
@@ -264,9 +266,10 @@ Workspace → Project relation   ✅ Done
 Initial migration              ✅ Done
 Database created               ✅ Done
 
-User / Identity                ⏳ Next
-ProjectMember                  ⏳ Next
-ProjectRole                    ⏳ Next
+User / Identity                ✅ Done
+ProjectMember                  ✅ Done
+ProjectRole                    ✅ Done
+TaskItem, Comment, Label       ✅ Done
 
 Authentication                 ❌ Not started
 Authorization                  ❌ Not started

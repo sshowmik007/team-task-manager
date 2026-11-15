@@ -33,7 +33,6 @@ classDiagram
     direction TB
 
     class IdentityUserGuid {
-        <<ASP.NET Core Identity>>
         +Guid Id
         +string UserName
         +string Email
@@ -46,11 +45,11 @@ classDiagram
         +string DisplayName
         +DateTime CreatedAt
         +DateTime ModifiedAt
-        +ICollection~ProjectMember~ ProjectMemberships
-        +ICollection~TaskItem~ CreatedTasks
-        +ICollection~TaskItem~ AssignedTasks
-        +ICollection~Comment~ Comments
-        +ICollection~RefreshToken~ RefreshTokens
+        +List~ProjectMember~ ProjectMemberships
+        +List~TaskItem~ CreatedTasks
+        +List~TaskItem~ AssignedTasks
+        +List~Comment~ Comments
+        +List~RefreshToken~ RefreshTokens
     }
 
     class Workspace {
@@ -59,7 +58,7 @@ classDiagram
         +string Description
         +Guid CreatedById
         +DateTime CreatedAt
-        +ICollection~Project~ Projects
+        +List~Project~ Projects
     }
 
     class Project {
@@ -70,9 +69,9 @@ classDiagram
         +Guid CreatedById
         +DateTime CreatedAt
         +Workspace Workspace
-        +ICollection~ProjectMember~ Members
-        +ICollection~TaskItem~ Tasks
-        +ICollection~Label~ Labels
+        +List~ProjectMember~ Members
+        +List~TaskItem~ Tasks
+        +List~Label~ Labels
     }
 
     class ProjectMember {
@@ -92,16 +91,16 @@ classDiagram
         +string Description
         +TaskItemStatus Status
         +TaskPriority Priority
-        +Guid? AssigneeId
+        +Guid AssigneeId
         +Guid CreatedById
-        +DateTime? DueDate
+        +DateTime DueDate
         +DateTime CreatedAt
         +DateTime ModifiedAt
         +Project Project
         +ApplicationUser Assignee
         +ApplicationUser CreatedBy
-        +ICollection~Comment~ Comments
-        +ICollection~Label~ Labels
+        +List~Comment~ Comments
+        +List~Label~ Labels
         +bool CanTransitionTo(TaskItemStatus newStatus)
         +void AssignTo(Guid memberUserId)
     }
@@ -123,7 +122,7 @@ classDiagram
         +string Name
         +string ColorHex
         +Project Project
-        +ICollection~TaskItem~ Tasks
+        +List~TaskItem~ Tasks
     }
 
     class RefreshToken {
@@ -196,19 +195,19 @@ classDiagram
     IdentityUserGuid <|-- ApplicationUser : inherits
 
     %% Associations
-    ApplicationUser "1" <-- "0..*" ProjectMember : UserId
-    Project "1" <-- "0..*" ProjectMember : ProjectId
-    Workspace "1" <-- "0..*" Project : WorkspaceId
-    Project "1" <-- "0..*" TaskItem : ProjectId
-    Project "1" <-- "0..*" Label : ProjectId
-    TaskItem "1" <-- "0..*" Comment : TaskItemId
-    ApplicationUser "1" <-- "0..*" Comment : AuthorId
-    ApplicationUser "1" <-- "0..*" TaskItem : CreatedById
-    ApplicationUser "0..1" <-- "0..*" TaskItem : AssigneeId
-    ApplicationUser "1" <-- "0..*" RefreshToken : UserId
+    ProjectMember "0..*" --> "1" ApplicationUser : UserId
+    ProjectMember "0..*" --> "1" Project : ProjectId
+    Project "0..*" --> "1" Workspace : WorkspaceId
+    TaskItem "0..*" --> "1" Project : ProjectId
+    Label "0..*" --> "1" Project : ProjectId
+    Comment "0..*" --> "1" TaskItem : TaskItemId
+    Comment "0..*" --> "1" ApplicationUser : AuthorId
+    TaskItem "0..*" --> "1" ApplicationUser : CreatedById
+    TaskItem "0..*" --> "0..1" ApplicationUser : AssigneeId
+    RefreshToken "0..*" --> "1" ApplicationUser : UserId
 
     %% Many to Many
-    TaskItem "0..*" <--> "0..*" Label : TaskLabel (M:N)
+    TaskItem "0..*" -- "0..*" Label : TaskLabel
 
     %% Enums
     ProjectMember ..> ProjectRole : uses
@@ -644,8 +643,8 @@ flowchart LR
         end
 
         subgraph UC_GUARDS["System Guards & Middleware"]
-            UC_VERIFY_JWT(["<<include>> Validate JWT Token"])
-            UC_CHECK_MEMBERSHIP(["<<include>> Check Project Membership"])
+            G_AUTH(["[Include] Verify JWT Token"])
+            G_MEM["[Include] Verify Project Membership"]
         end
     end
 
@@ -672,11 +671,11 @@ flowchart LR
     UC_AI_DESC -.->|delegates to| AI_BOT
 
     %% Include / Extend relationships
-    UC_CREATE_TASK -.->|<<include>>| UC_VERIFY_JWT
-    UC_CREATE_TASK -.->|<<include>>| UC_CHECK_MEMBERSHIP
-    UC_TRANS_STATUS -.->|<<include>>| UC_CHECK_MEMBERSHIP
-    UC_ADD_COMMENT -.->|<<include>>| UC_CHECK_MEMBERSHIP
-    UC_CREATE_TASK -.->|<<extend>>| UC_AI_BREAKDOWN
+    UC_CREATE_TASK -.->|includes| G_AUTH
+    UC_CREATE_TASK -.->|includes| G_MEM
+    UC_TRANS_STATUS -.->|includes| G_MEM
+    UC_ADD_COMMENT -.->|includes| G_MEM
+    UC_CREATE_TASK -.->|extends| UC_AI_BREAKDOWN
 ```
 
 ---
@@ -687,44 +686,44 @@ This flowchart outlines the strict backend execution pipeline for handling secur
 
 ```mermaid
 flowchart TD
-    START([Incoming HTTP Request]) --> EXTRACT[Extract 'Authorization: Bearer <token>' Header]
+    START([Incoming HTTP Request]) --> EXTRACT["Extract Authorization: Bearer token Header"]
     
-    EXTRACT --> CHK_TOKEN{Is Bearer Token Present & Well-Formed?}
-    CHK_TOKEN -- No --> ERR_401_NO_TOKEN[Return 401 Unauthorized\n'Missing or malformed Authorization header']
+    EXTRACT --> CHK_TOKEN{"Is Bearer Token Present & Well-Formed?"}
+    CHK_TOKEN -- No --> ERR_401_NO_TOKEN["Return 401 Unauthorized: Missing or malformed header"]
     
-    CHK_TOKEN -- Yes --> VAL_SIG{Validate JWT Signature & Expiration}
-    VAL_SIG -- Invalid / Expired --> ERR_401_EXP[Return 401 Unauthorized\n'Token expired or invalid signature']
+    CHK_TOKEN -- Yes --> VAL_SIG{"Validate JWT Signature & Expiration"}
+    VAL_SIG -- Invalid / Expired --> ERR_401_EXP["Return 401 Unauthorized: Token expired or invalid signature"]
     
-    VAL_SIG -- Valid --> SET_PRINCIPAL[Set HttpContext.User ClaimsPrincipal\nExtract UserId from ClaimTypes.NameIdentifier]
+    VAL_SIG -- Valid --> SET_PRINCIPAL["Set HttpContext.User ClaimsPrincipal\nExtract UserId from ClaimTypes.NameIdentifier"]
     
-    SET_PRINCIPAL --> EXTRACT_ROUTE[Extract Route Parameters: projectId, taskId]
+    SET_PRINCIPAL --> EXTRACT_ROUTE["Extract Route Parameters: projectId, taskId"]
     
-    EXTRACT_ROUTE --> CHK_RESOURCE_AUTH{Is Route Resource-Scoped?\ne.g. /projects/{projectId}/*}
+    EXTRACT_ROUTE --> CHK_RESOURCE_AUTH{"Is Route Resource-Scoped? (e.g. /projects/:projectId/*)"}
     
-    CHK_RESOURCE_AUTH -- No --> EXEC_NON_RESOURCE[Execute Global Service / Controller Action]
+    CHK_RESOURCE_AUTH -- No --> EXEC_NON_RESOURCE["Execute Global Service / Controller Action"]
     
-    CHK_RESOURCE_AUTH -- Yes --> QUERY_MEMBERSHIP[Query ProjectMembers table:\nWHERE ProjectId = @pId AND UserId = @userId]
+    CHK_RESOURCE_AUTH -- Yes --> QUERY_MEMBERSHIP["Query ProjectMembers table:\nWHERE ProjectId = @pId AND UserId = @userId"]
     
-    QUERY_MEMBERSHIP --> IS_MEMBER{Record Found in ProjectMembers?}
-    IS_MEMBER -- No --> ERR_403[Return 403 Forbidden\n'User has no access to this project resource']
+    QUERY_MEMBERSHIP --> IS_MEMBER{"Record Found in ProjectMembers?"}
+    IS_MEMBER -- No --> ERR_403["Return 403 Forbidden: User has no access to this project"]
     
-    IS_MEMBER -- Yes --> CHK_REQ_ROLE{Does User Role satisfy\nMinimum Required Role?\n(Owner, Admin, Member, Viewer)}
-    CHK_REQ_ROLE -- Insufficient --> ERR_403_ROLE[Return 403 Forbidden\n'Role insufficient for this mutation']
+    IS_MEMBER -- Yes --> CHK_REQ_ROLE{"Does User Role satisfy Minimum Required Role?"}
+    CHK_REQ_ROLE -- Insufficient --> ERR_403_ROLE["Return 403 Forbidden: Role insufficient for this mutation"]
     
-    CHK_REQ_ROLE -- Authorized --> FETCH_ENTITY{Is operation on specific Task?\n(taskId provided)}
+    CHK_REQ_ROLE -- Authorized --> FETCH_ENTITY{"Is operation on specific Task? (taskId provided)"}
     
-    FETCH_ENTITY -- No (e.g. List/Create) --> RUN_ACTION[Run Project Action / Create Task]
+    FETCH_ENTITY -- No (List/Create) --> RUN_ACTION["Run Project Action / Create Task"]
     
-    FETCH_ENTITY -- Yes --> QUERY_TASK[Query TaskItems WHERE Id = @taskId]
-    QUERY_TASK --> TASK_EXISTS{Task Exists AND\nTask.ProjectId == @projectId?}
+    FETCH_ENTITY -- Yes --> QUERY_TASK["Query TaskItems WHERE Id = @taskId"]
+    QUERY_TASK --> TASK_EXISTS{"Task Exists AND Task.ProjectId == @projectId?"}
     
-    TASK_EXISTS -- Mismatch / Not Found --> ERR_404[Return 404 Not Found\n'Resource does not exist in project scope']
+    TASK_EXISTS -- Mismatch / Not Found --> ERR_404["Return 404 Not Found: Resource does not exist in project scope"]
     
-    TASK_EXISTS -- Verified Safe --> VAL_INVARIANTS{Validate Business Invariants\n(e.g. Status Transition Matrix,\nAssignee is Project Member)}
+    TASK_EXISTS -- Verified Safe --> VAL_INVARIANTS{"Validate Business Invariants (Status Transition Matrix, Assignee is Project Member)"}
     
-    VAL_INVARIANTS -- Invalid --> ERR_400[Return 400 Bad Request\n'Invalid transition or non-member assignee']
+    VAL_INVARIANTS -- Invalid --> ERR_400["Return 400 Bad Request: Invalid transition or non-member assignee"]
     
-    VAL_INVARIANTS -- Valid --> DB_SAVE[Execute Mutation & AppDbContext.SaveChangesAsync]
+    VAL_INVARIANTS -- Valid --> DB_SAVE["Execute Mutation & AppDbContext.SaveChangesAsync()"]
     DB_SAVE --> SUCCESS([Return 200 OK / 201 Created with Typed DTO])
 ```
 

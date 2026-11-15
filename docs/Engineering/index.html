@@ -239,7 +239,6 @@
 classDiagram
     direction TB
     class IdentityUserGuid {
-        <<IdentityUser>>
         +Guid Id
         +string UserName
         +string Email
@@ -249,10 +248,10 @@ classDiagram
         +string DisplayName
         +DateTime CreatedAt
         +DateTime ModifiedAt
-        +ICollection~ProjectMember~ ProjectMemberships
-        +ICollection~TaskItem~ CreatedTasks
-        +ICollection~TaskItem~ AssignedTasks
-        +ICollection~Comment~ Comments
+        +List~ProjectMember~ ProjectMemberships
+        +List~TaskItem~ CreatedTasks
+        +List~TaskItem~ AssignedTasks
+        +List~Comment~ Comments
     }
     class Workspace {
         +Guid Id
@@ -260,7 +259,7 @@ classDiagram
         +string Description
         +Guid CreatedById
         +DateTime CreatedAt
-        +ICollection~Project~ Projects
+        +List~Project~ Projects
     }
     class Project {
         +Guid Id
@@ -270,9 +269,9 @@ classDiagram
         +Guid CreatedById
         +DateTime CreatedAt
         +Workspace Workspace
-        +ICollection~ProjectMember~ Members
-        +ICollection~TaskItem~ Tasks
-        +ICollection~Label~ Labels
+        +List~ProjectMember~ Members
+        +List~TaskItem~ Tasks
+        +List~Label~ Labels
     }
     class ProjectMember {
         +Guid Id
@@ -290,16 +289,16 @@ classDiagram
         +string Description
         +TaskItemStatus Status
         +TaskPriority Priority
-        +Guid? AssigneeId
+        +Guid AssigneeId
         +Guid CreatedById
-        +DateTime? DueDate
+        +DateTime DueDate
         +DateTime CreatedAt
         +DateTime ModifiedAt
         +Project Project
         +ApplicationUser Assignee
         +ApplicationUser CreatedBy
-        +ICollection~Comment~ Comments
-        +ICollection~Label~ Labels
+        +List~Comment~ Comments
+        +List~Label~ Labels
     }
     class Comment {
         +Guid Id
@@ -317,17 +316,17 @@ classDiagram
         +string Name
         +string ColorHex
         +Project Project
-        +ICollection~TaskItem~ Tasks
+        +List~TaskItem~ Tasks
     }
     class ProjectRole {
-        <<enumeration>>
+        &lt;&lt;enumeration&gt;&gt;
         Owner
         Admin
         Member
         Viewer
     }
     class TaskItemStatus {
-        <<enumeration>>
+        &lt;&lt;enumeration&gt;&gt;
         Todo
         InProgress
         Review
@@ -335,16 +334,16 @@ classDiagram
     }
 
     IdentityUserGuid <|-- ApplicationUser : inherits
-    ApplicationUser "1" <-- "0..*" ProjectMember : UserId
-    Project "1" <-- "0..*" ProjectMember : ProjectId
-    Workspace "1" <-- "0..*" Project : WorkspaceId
-    Project "1" <-- "0..*" TaskItem : ProjectId
-    Project "1" <-- "0..*" Label : ProjectId
-    TaskItem "1" <-- "0..*" Comment : TaskItemId
-    ApplicationUser "1" <-- "0..*" Comment : AuthorId
-    ApplicationUser "1" <-- "0..*" TaskItem : CreatedById
-    ApplicationUser "0..1" <-- "0..*" TaskItem : AssigneeId
-    TaskItem "0..*" <--> "0..*" Label : TaskLabel (M:N)
+    ProjectMember "0..*" --> "1" ApplicationUser : UserId
+    ProjectMember "0..*" --> "1" Project : ProjectId
+    Project "0..*" --> "1" Workspace : WorkspaceId
+    TaskItem "0..*" --> "1" Project : ProjectId
+    Label "0..*" --> "1" Project : ProjectId
+    Comment "0..*" --> "1" TaskItem : TaskItemId
+    Comment "0..*" --> "1" ApplicationUser : AuthorId
+    TaskItem "0..*" --> "1" ApplicationUser : CreatedById
+    TaskItem "0..*" --> "0..1" ApplicationUser : AssigneeId
+    TaskItem "0..*" -- "0..*" Label : TaskLabel
     ProjectMember ..> ProjectRole : uses
     TaskItem ..> TaskItemStatus : uses
       </div>
@@ -654,8 +653,8 @@ flowchart LR
         end
 
         subgraph GUARDS["Security Verification"]
-            G_AUTH(["<<include>> Verify JWT"])
-            G_MEM["<<include>> Verify Project Membership"]
+            G_AUTH(["[Include] Verify JWT"])
+            G_MEM["[Include] Verify Project Membership"]
         end
     end
 
@@ -677,10 +676,10 @@ flowchart LR
 
     UC_AI_BREAKDOWN -.->|delegates to| AI_BOT
 
-    UC_TASK_CRUD -.->|<<include>>| G_AUTH
-    UC_TASK_CRUD -.->|<<include>>| G_MEM
-    UC_MOVE_STATUS -.->|<<include>>| G_MEM
-    UC_COMMENT -.->|<<include>>| G_MEM
+    UC_TASK_CRUD -.->|includes| G_AUTH
+    UC_TASK_CRUD -.->|includes| G_MEM
+    UC_MOVE_STATUS -.->|includes| G_MEM
+    UC_COMMENT -.->|includes| G_MEM
       </div>
     </div>
   </section>
@@ -696,36 +695,36 @@ flowchart LR
       <div class="mermaid">
 flowchart TD
     START([HTTP Request Received]) --> CHK_AUTH{Bearer Token in Header?}
-    CHK_AUTH -- No --> ERR_401[Return 401 Unauthorized]
+    CHK_AUTH -- No --> ERR_401["Return 401 Unauthorized"]
     
-    CHK_AUTH -- Yes --> VAL_JWT{JWT Signature & Expiration Valid?}
+    CHK_AUTH -- Yes --> VAL_JWT{"JWT Signature & Expiration Valid?"}
     VAL_JWT -- Invalid --> ERR_401
     
-    VAL_JWT -- Valid --> EXTRACT_CTX[Extract Current UserId & Route Params]
-    EXTRACT_CTX --> IS_RES_ROUTE{Is route scoped to /projects/{pId}/*?}
+    VAL_JWT -- Valid --> EXTRACT_CTX["Extract Current UserId & Route Params"]
+    EXTRACT_CTX --> IS_RES_ROUTE{"Is route scoped to /projects/:projectId/*?"}
     
-    IS_RES_ROUTE -- No --> EXEC_GLOBAL[Execute Global Action]
+    IS_RES_ROUTE -- No --> EXEC_GLOBAL["Execute Global Action"]
     
-    IS_RES_ROUTE -- Yes --> Q_MEMBER[Query ProjectMembers\nWHERE ProjectId = @pId AND UserId = @userId]
-    Q_MEMBER --> HAS_MEMBERSHIP{Record Found?}
+    IS_RES_ROUTE -- Yes --> Q_MEMBER["Query ProjectMembers WHERE ProjectId = @pId AND UserId = @userId"]
+    Q_MEMBER --> HAS_MEMBERSHIP{"Record Found in ProjectMembers?"}
     
-    HAS_MEMBERSHIP -- No --> ERR_403[Return 403 Forbidden\n'Resource access denied']
+    HAS_MEMBERSHIP -- No --> ERR_403["Return 403 Forbidden: Resource access denied"]
     
-    HAS_MEMBERSHIP -- Yes --> CHK_ROLE{User Role satisfies\nMinimum Required Role?}
+    HAS_MEMBERSHIP -- Yes --> CHK_ROLE{"User Role satisfies Minimum Required Role?"}
     CHK_ROLE -- No --> ERR_403
     
-    CHK_ROLE -- Yes --> TARGET_TASK{Specific taskId specified?}
-    TARGET_TASK -- No --> RUN_PROJ_ACTION[Execute Project Action / List]
+    CHK_ROLE -- Yes --> TARGET_TASK{"Specific taskId specified in route?"}
+    TARGET_TASK -- No --> RUN_PROJ_ACTION["Execute Project Action / List"]
     
-    TARGET_TASK -- Yes --> Q_TASK[Query TaskItems WHERE Id = @taskId]
-    Q_TASK --> TASK_MATCH{Task Exists AND\nTask.ProjectId == @pId?}
+    TARGET_TASK -- Yes --> Q_TASK["Query TaskItems WHERE Id = @taskId"]
+    Q_TASK --> TASK_MATCH{"Task Exists AND Task.ProjectId == @pId?"}
     
-    TASK_MATCH -- No --> ERR_404[Return 404 Not Found\n'IDOR mismatch']
+    TASK_MATCH -- No --> ERR_404["Return 404 Not Found: Resource not in project"]
     
-    TASK_MATCH -- Yes --> VAL_TRANS{Status Transition Allowed\nby State Machine?}
-    VAL_TRANS -- No --> ERR_400[Return 400 Bad Request]
+    TASK_MATCH -- Yes --> VAL_TRANS{"Status Transition Allowed by State Machine?"}
+    VAL_TRANS -- No --> ERR_400["Return 400 Bad Request"]
     
-    VAL_TRANS -- Yes --> COMMIT_DB[AppDbContext.SaveChangesAsync]
+    VAL_TRANS -- Yes --> COMMIT_DB["AppDbContext.SaveChangesAsync()"]
     COMMIT_DB --> SUCCESS([Return 200 OK with TaskDto])
       </div>
     </div>

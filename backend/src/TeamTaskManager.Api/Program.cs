@@ -1,6 +1,7 @@
-using Microsoft.EntityFrameworkCore;
-using TeamTaskManager.Api.Data;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Win32;
+using TeamTaskManager.Api.Data;
 using TeamTaskManager.Api.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,9 +10,20 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services
-    .AddIdentityCore<ApplicationUser>()
+    .AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.Password.RequireDigit = true;
+        options.Password.RequiredLength = 6;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+
+    })
     .AddRoles<IdentityRole<Guid>>()
     .AddEntityFrameworkStores<AppDbContext>();
+//AddIdentityCore<TUser>() registers the core Identity services, while roles have to be added separately with AddRoles
+
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(

@@ -1,22 +1,9 @@
-using Microsoft.AspNetCore.Http.HttpResults;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO.Pipelines;
-using System.Reflection.Emit;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using TeamTaskManager.Api.Data;
 using TeamTaskManager.Api.Models;
-using static Npgsql.Replication.PgOutput.Messages.RelationMessage;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+
 
 
 namespace TeamTaskManager.Api.Data;

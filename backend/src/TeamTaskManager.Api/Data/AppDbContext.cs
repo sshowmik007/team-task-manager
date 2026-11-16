@@ -15,25 +15,28 @@ public class AppDbContext
         : base(options)
     {
     }
+    // =========================================================================
+    // DATABASE TABLES (DbSets)
+    // Each DbSet represents a table in your PostgreSQL database.
+    // =========================================================================
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
-
     public DbSet<Project> Projects => Set<Project>();
-
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
-
     public DbSet<Comment> Comments => Set<Comment>();
-
     public DbSet<Label> Labels => Set<Label>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
+        // 1. PROJECT MEMBERSHIP COMPOSITE UNIQUE INDEX:
+        // Ensures a User can only join a specific Project ONCE (no duplicate memberships).
         builder.Entity<ProjectMember>()
             .HasIndex(x => new { x.ProjectId, x.UserId })
             .IsUnique();
 
+        // 2. PROJECT MEMBER RELATIONSHIPS:
         builder.Entity<ProjectMember>()
             .HasOne(x => x.Project)
             .WithMany(x => x.Members)
@@ -44,47 +47,58 @@ public class AppDbContext
             .WithMany(x => x.ProjectMemberships)
             .HasForeignKey(x => x.UserId);
 
-        builder.Entity<TaskItem>().
-            HasOne(x => x.Project)
+        // 3. TASK ITEM RELATIONSHIPS:
+        builder.Entity<TaskItem>()
+            .HasOne(x => x.Project)
             .WithMany(x => x.Tasks)
             .HasForeignKey(x => x.ProjectId);
 
+        // DeleteBehavior.Restrict: Prevents deleting a User if they still have tasks assigned
         builder.Entity<TaskItem>()
             .HasOne(x => x.Assignee)
             .WithMany(x => x.AssignedTasks)
             .HasForeignKey(x => x.AssigneeId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // DeleteBehavior.Restrict: Prevents deleting a User if they are the creator of tasks
         builder.Entity<TaskItem>()
             .HasOne(x => x.CreatedBy)
             .WithMany(x => x.CreatedTasks)
             .HasForeignKey(x => x.CreatedById)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // 4. COMMENT RELATIONSHIPS:
         builder.Entity<Comment>()
             .HasOne(x => x.TaskItem)
             .WithMany(x => x.Comments)
             .HasForeignKey(x => x.TaskItemId);
 
+        // DeleteBehavior.Restrict: Prevents deleting a User if they authored comments
         builder.Entity<Comment>()
             .HasOne(x => x.Author)
             .WithMany(x => x.Comments)
             .HasForeignKey(x => x.AuthorId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // 5. LABEL RELATIONSHIPS & CONSTRAINTS:
         builder.Entity<Label>()
             .HasOne(x => x.Project)
             .WithMany(x => x.Labels)
             .HasForeignKey(x => x.ProjectId);
 
+        // Unique label name within a project (e.g. only one 'bug' tag per project)
         builder.Entity<Label>()
             .HasIndex(x => new { x.ProjectId, x.Name })
             .IsUnique();
 
+        // 6. MANY-TO-MANY (TaskItem <-> Label):
+        // EF Core automatically configures an internal join table for tasks and labels
         builder.Entity<TaskItem>()
             .HasMany(x => x.Labels)
             .WithMany(x => x.Tasks);
 
+        // 7. COLUMN CONSTRAINTS & SIZING:
+        // Enforces string bounds and NOT NULL constraints in PostgreSQL
         builder.Entity<Workspace>(entity =>
         {
             entity.Property(x => x.Name)
@@ -102,6 +116,8 @@ public class AppDbContext
                 .HasMaxLength(2000);
         });
 
+        // 8. QUERY PERFORMANCE INDEXES:
+        // Creating indexes on ProjectId, AssigneeId, and Status makes Kanban filtering fast
         builder.Entity<TaskItem>(entity =>
         {
             entity.Property(x => x.Title)
@@ -111,11 +127,9 @@ public class AppDbContext
             entity.Property(x => x.Description)
                 .HasMaxLength(4000);
 
-            entity.HasIndex(x => x.ProjectId);
-
-            entity.HasIndex(x => x.AssigneeId);
-
-            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.ProjectId);  // Accelerates: WHERE ProjectId = @pId
+            entity.HasIndex(x => x.AssigneeId); // Accelerates: WHERE AssigneeId = @userId
+            entity.HasIndex(x => x.Status);     // Accelerates: WHERE Status = Todo / Done
         });
 
         builder.Entity<Comment>(entity =>

@@ -7,6 +7,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
+
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace TeamTaskManager.Api.Controllers;
 
@@ -35,11 +39,11 @@ public class AuthController : ControllerBase
             ?? throw new InvalidOperationException("JWT key is missing.");
 
         var claims = new List<Claim>
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-        new Claim("displayName", user.DisplayName ?? string.Empty)
-    };
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
+            new Claim("displayName", user.DisplayName ?? string.Empty)
+        };
 
         var key = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtKey));
@@ -110,6 +114,25 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             accessToken = token
+        });
+    }
+
+
+    //Microsoft's authorization docs use [Authorize] to require an authenticated user before the action can execute.https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-8.0&utm_source=chatgpt.com
+
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult Me()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var email = User.FindFirstValue(ClaimTypes.Email);
+        var displayName = User.FindFirstValue("displayName");
+
+        return Ok(new
+        {
+            UserId = userId,
+            Email = email,
+            DisplayName = displayName
         });
     }
 }

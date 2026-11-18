@@ -8,8 +8,8 @@
 - **Project:** Team Task Manager / Mini Jira
 - **Current Phase:** Phase 2 — Core Domain APIs & Resource-Level Authorization
 - **Status:** In Progress
-- **Last Completed Lesson:** Comment CRUD (Create, Read, Update, Delete with Author/Owner Authorization)
-- **Next Lesson:** Labels CRUD / Task Label Attachment OR AI Task Assistant
+- **Last Completed Lesson:** Label CRUD + Attach/Remove Labels from Tasks (Owner-only taxonomy + Member tagging)
+- **Next Lesson:** Task Querying (Filtering, Searching & Pagination) OR AI Task Assistant
 
 ---
 
@@ -145,6 +145,27 @@
 - [x] Delete comment (`DELETE /api/comments/{commentId}`)
   - Dual authorization rule: Author can delete own comment; Project Owner can delete any comment for moderation
 
+### Labels & Task Categorization API
+
+- [x] Create label (`POST /api/projects/{projectId}/labels`)
+  - Owner-only authorization check
+  - Application-level duplicate validation (`ProjectId` + `Name`)
+- [x] List project labels (`GET /api/projects/{projectId}/labels`)
+  - Any project member can view labels
+  - Alphabetical sorting via `.OrderBy(x => x.Name)`
+- [x] Update label (`PUT /api/labels/{labelId}`)
+  - Owner-only authorization check
+  - Self-excluding duplicate validation (`x.Id != labelId`)
+- [x] Delete label (`DELETE /api/labels/{labelId}`)
+  - Owner-only authorization check
+  - EF Core automatically cleans up many-to-many junction table rows
+- [x] Attach label to task (`POST /api/tasks/{taskId}/labels/{labelId}`)
+  - Any project member can tag tasks
+  - Cross-project boundary check (`label.ProjectId == task.ProjectId`)
+  - Duplicate attachment prevention check (`task.Labels.Any(x => x.Id == labelId)`)
+- [x] Remove label from task (`DELETE /api/tasks/{taskId}/labels/{labelId}`)
+  - Any project member can detach labels from tasks
+
 ### Problems Solved
 
 - [x] Fixed EF migration command/project-path issue
@@ -168,27 +189,23 @@ Completed inside Phase 2:
 - [x] Project Membership & Roles API (`ProjectsController`)
 - [x] Task CRUD API (`TasksController`)
 - [x] Comment CRUD API (`CommentsController`)
+- [x] Labels & Task Tagging API (`LabelsController`)
 - [x] Permission Matrix & Security Documentation (`docs/permission-matrix.md`)
 
 Still required for Phase 2:
 
-- [ ] Labels API (`LabelsController`)
-  - [ ] Create label
-  - [ ] List labels for project
-  - [ ] Attach label to task
-  - [ ] Remove label from task
 - [ ] Query Features (Search, Filtering by status/assignee, Pagination)
 
 ---
 
 ## ⏭️ Next Immediate Lessons
 
-1. **Labels & Task Categorization**
-   - Create Label contract & endpoint (`POST /api/projects/{projectId}/labels`)
-   - List Labels (`GET /api/projects/{projectId}/labels`)
-   - Attach / Detach labels to/from tasks (`POST/DELETE /api/tasks/{taskId}/labels/{labelId}`)
-2. **Task Querying (Filter & Search)**
-   - Filter by `Status`, `AssigneeId`, and search by `Title` keyword
+1. **Task Querying (Filter, Search & Pagination)**
+   - Filter by `Status`, `AssigneeId`
+   - Search by `Title` keyword
+   - Pagination parameters (`page`, `pageSize`)
+2. **AI Task Assistant**
+   - Integrate Gemini API for task breakdowns & checklists
 
 ---
 
@@ -241,10 +258,10 @@ Authentication (JWT)           ✅ Done
 Projects & Roles API           ✅ Done
 Task CRUD API                  ✅ Done
 Comment CRUD API               ✅ Done
+Labels & Tagging API           ✅ Done
 Permission Matrix Docs         ✅ Done
 
-Labels API                     🟡 Next up
-Query Features (Search/Filter) ❌ Not started
+Query Features (Search/Filter) 🟡 Next up
 Frontend UI Pages              ❌ Not started
 AI Task Feature                ❌ Not started
 Automated Test Suite           ❌ Not started

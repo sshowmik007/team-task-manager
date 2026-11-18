@@ -27,6 +27,12 @@ This document defines the Role-Based Access Control (RBAC) and Resource-Level Au
 | **Comment** | Add Comment | `POST /api/tasks/{id}/comments` | ❌ `401` | ❌ `403` | ✅ | ✅ | ✅ |
 | **Comment** | Edit Comment | `PUT /api/comments/{id}` | ❌ `401` | ❌ `403` | ❌ `403` | ✅ *(Own Comment only)* | ❌ `403` *(Preserves thread integrity)* |
 | **Comment** | Delete Comment | `DELETE /api/comments/{id}` | ❌ `401` | ❌ `403` | ❌ `403` *(if not author)* | ✅ *(Own Comment)* | ✅ *(Moderation power)* |
+| **Label** | View Project Labels | `GET /api/projects/{id}/labels` | ❌ `401` | ❌ `403` | ✅ | ✅ | ✅ |
+| **Label** | Create Label | `POST /api/projects/{id}/labels` | ❌ `401` | ❌ `403` | ❌ `403` | ❌ `403` | ✅ |
+| **Label** | Update Label | `PUT /api/labels/{id}` | ❌ `401` | ❌ `403` | ❌ `403` | ❌ `403` | ✅ |
+| **Label** | Delete Label | `DELETE /api/labels/{id}` | ❌ `401` | ❌ `403` | ❌ `403` | ❌ `403` | ✅ |
+| **Label** | Attach Label to Task | `POST /api/tasks/{tid}/labels/{lid}` | ❌ `401` | ❌ `403` | ✅ | ✅ | ✅ |
+| **Label** | Remove Label from Task | `DELETE /api/tasks/{tid}/labels/{lid}` | ❌ `401` | ❌ `403` | ✅ | ✅ | ✅ |
 
 ---
 
@@ -84,3 +90,8 @@ HTTP Request
 * **Read Comments**: Caller must be a project member. Results are returned sorted chronologically (`.OrderBy(x => x.CreatedAt)`).
 * **Update Comment**: **Author-Only Rule**. Even Project Owners cannot alter another user's comment text to ensure message authenticity.
 * **Delete Comment**: **Author OR Owner Rule**. The comment's author can delete their own comment, and the Project Owner can delete any comment for moderation purposes.
+
+### E. Labels (`LabelsController`)
+* **Create, Update, Delete Label**: Restricted strictly to `ProjectRole.Owner`. Labels define project-level taxonomy and should not be modified by arbitrary members. Name uniqueness per project is verified before persisting.
+* **View Labels**: Any project member (`Owner` or `Member`) can list labels to use for tagging tasks.
+* **Attach / Detach Label to/from Task**: Any project member can tag or untag tasks. Cross-project boundary check strictly enforces that `label.ProjectId == task.ProjectId` to prevent cross-tenant label injection.

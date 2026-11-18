@@ -6,9 +6,10 @@
 ## Current Status
 
 - **Project:** Team Task Manager / Mini Jira
-- **Current Phase:** Phase 1 — Domain + Database Foundation
+- **Current Phase:** Phase 2 — Core Domain APIs & Resource-Level Authorization
 - **Status:** In Progress
-- **Next Lesson:** User + ProjectMember + ProjectRole
+- **Last Completed Lesson:** Comment CRUD (Create, Read, Update, Delete with Author/Owner Authorization)
+- **Next Lesson:** Labels CRUD / Task Label Attachment OR AI Task Assistant
 
 ---
 
@@ -21,6 +22,9 @@
 - [x] Created `frontend/`
 - [x] Created `docs/`
 - [x] Added project master-plan documentation
+- [x] Created interactive visual architecture documentation (`docs/Engineering/index.html` & `docs/Engineering/README.md`)
+- [x] Added complete folder architecture guide in root `README.md`
+- [x] Created comprehensive Role & Resource Authorization Matrix (`docs/permission-matrix.md`)
 
 ### Backend Setup
 
@@ -32,10 +36,15 @@
   - [x] `Data/`
   - [x] `Models/`
   - [x] `Contracts/`
+    - [x] `Contracts/Auth/`
+    - [x] `Contracts/Projects/`
+    - [x] `Contracts/Tasks/`
+    - [x] `Contracts/Comments/`
   - [x] `Services/`
   - [x] `Auth/`
   - [x] `Authorization/`
   - [x] `Common/`
+- [x] Configured Swagger UI with JWT Bearer authentication scheme (`AddSecurityDefinition` & `AddSecurityRequirement`)
 
 ### Frontend Setup
 
@@ -57,31 +66,84 @@
 ### Database / EF Core
 
 - [x] Installed/configured Entity Framework Core
-- [x] Installed/configured PostgreSQL provider
-- [x] Configured PostgreSQL connection string
-- [x] Created `AppDbContext`
+- [x] Installed/configured PostgreSQL provider (`Npgsql.EntityFrameworkCore.PostgreSQL`)
+- [x] Configured PostgreSQL connection string in `appsettings.json`
+- [x] Created `AppDbContext` inheriting `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`
 - [x] Registered `AppDbContext` in `Program.cs`
 - [x] Backend successfully connects to PostgreSQL
-- [x] Database created successfully
-- [x] Initial EF Core migration created/applied
+- [x] Database created successfully (`team_task_manager`)
+- [x] Default Workspace record seeded into database
+- [x] Initial EF Core migration created and applied
+- [x] Schema relationships, cascade rules, and indexes configured:
+  - [x] ProjectMember composite key & unique constraint `(ProjectId, UserId)`
+  - [x] Restrict delete behavior on User foreign keys (Assignee, CreatedBy, Author)
+  - [x] Cascade delete behavior on Project -> TaskItem -> Comment hierarchy
 
 ### Domain Models
 
 - [x] Created `Workspace`
 - [x] Created `Project`
-- [x] Added `Workspace.Id`
-- [x] Added `Project.WorkspaceId`
-- [x] Added `Project.Workspace` navigation property
-- [x] Added `Workspace.Projects` collection navigation
-- [x] Established one-to-many relationship:
+- [x] Created `ApplicationUser` (inheriting `IdentityUser<Guid>`)
+- [x] Created `ProjectMember` (junction entity)
+- [x] Created `ProjectRole` (`Owner`, `Member`)
+- [x] Created `TaskItem`
+- [x] Created `TaskItemStatus` (`Todo`, `InProgress`, `Done`)
+- [x] Created `Comment`
+- [x] Created `Label`
 
-```text
-Workspace
-   1
-   │
-   └──── *
-       Project
-```
+### Authentication & Identity API
+
+- [x] ASP.NET Core Identity integration configured
+- [x] Register (`POST /api/auth/register`) with automatic DisplayName & Email handling
+- [x] Login (`POST /api/auth/login`) with password verification
+- [x] Password hashing flow via ASP.NET Core Identity `UserManager`
+- [x] JWT access token generation with HMAC-SHA256 signing
+- [x] Token claims configured (`ClaimTypes.NameIdentifier`, `ClaimTypes.Email`, `ClaimTypes.Name`)
+- [x] Current-user profile endpoint (`GET /api/auth/me`) protected by `[Authorize]`
+
+### Project Management & Membership API
+
+- [x] Create project (`POST /api/projects`) with automatic `ProjectRole.Owner` membership assignment
+- [x] Get project details (`GET /api/projects/{projectId}`) with membership check
+- [x] Delete project (`DELETE /api/projects/{projectId}`) restricted strictly to `ProjectRole.Owner`
+- [x] Add project member (`POST /api/projects/{projectId}/members`) - Owner only
+- [x] List project members (`GET /api/projects/{projectId}/members`) - any project member
+- [x] Update project member role (`PUT /api/projects/{projectId}/members/{userId}/role`) - Owner only
+- [x] Remove project member (`DELETE /api/projects/{projectId}/members/{userId}`) - Owner only
+
+### Task Management API
+
+- [x] Create task (`POST /api/projects/{projectId}/tasks`)
+  - Enforced project membership for caller
+  - Verified optional `AssigneeId` is also a member of the same project
+  - Enforced `CreatedById = currentUserId` from JWT (mass assignment defense)
+  - Default status set to `TaskItemStatus.Todo`
+- [x] List project tasks (`GET /api/projects/{projectId}/tasks`)
+  - Filtered by `ProjectId`
+  - Optimized projection `.Select(...)` preventing circular serialization
+- [x] Get single task (`GET /api/tasks/{taskId}`)
+  - IDOR defense: verified caller is a member of `task.ProjectId`
+- [x] Update task (`PUT /api/tasks/{taskId}`)
+  - Enum range validation (`Enum.IsDefined`)
+  - Optional assignee project membership validation
+  - Audit timestamp update (`ModifiedAt = DateTimeOffset.UtcNow`)
+- [x] Delete task (`DELETE /api/tasks/{taskId}`)
+  - Owner vs Creator authorization: Owner can delete any task; Member can only delete tasks they personally created
+
+### Comment API
+
+- [x] Create comment (`POST /api/tasks/{taskId}/comments`)
+  - Verified caller is member of task's project
+  - `AuthorId` strictly extracted from JWT
+- [x] List task comments (`GET /api/tasks/{taskId}/comments`)
+  - Chronological sorting via `.OrderBy(x => x.CreatedAt)`
+  - Safe projection of author profile (`Id`, `DisplayName`, `Email`)
+- [x] Update comment (`PUT /api/comments/{commentId}`)
+  - Eager loaded `.Include(x => x.TaskItem)` for project verification
+  - Strict Author-only modification rule (`comment.AuthorId == currentUserId`)
+  - Updated `ModifiedAt = DateTimeOffset.UtcNow`
+- [x] Delete comment (`DELETE /api/comments/{commentId}`)
+  - Dual authorization rule: Author can delete own comment; Project Owner can delete any comment for moderation
 
 ### Problems Solved
 
@@ -89,165 +151,79 @@ Workspace
 - [x] Fixed `Workspace` namespace/type resolution error
 - [x] Fixed `IdentityDbContext<,,>` namespace resolution in `AppDbContext.cs`
 - [x] Aligned EF Core package versions (`8.0.11`) to eliminate `MSB3277` warning
-- [x] Rebuilt successfully after fixes
-- [x] Application ran successfully after fixes
+- [x] Fixed misplaced OpenApi `using` directive in `Program.cs`
+- [x] Fixed DbContext naming reference to `AppDbContext` across all controllers
+- [x] Seeded default `Workspace` record into PostgreSQL to resolve `404 Workspace not found` during project creation
+- [x] Rebuilt and verified full solution compilation with 0 warnings and 0 errors
 
 ---
 
 ## 🟡 In Progress
 
-### Phase 1 — Domain + Database Foundation
+### Phase 2 — Core Domain APIs & Resource-Level Authorization
 
-Completed inside Phase 1:
+Completed inside Phase 2:
 
-- [x] Workspace entity
-- [x] Project entity
-- [x] Workspace → Project relationship
-- [x] AppDbContext
-- [x] PostgreSQL connection
-- [x] Initial migration
-- [x] Database creation
+- [x] Authentication API (`AuthController`)
+- [x] Project Membership & Roles API (`ProjectsController`)
+- [x] Task CRUD API (`TasksController`)
+- [x] Comment CRUD API (`CommentsController`)
+- [x] Permission Matrix & Security Documentation (`docs/permission-matrix.md`)
 
-Still required for Phase 1:
+Still required for Phase 2:
 
-- [x] User / Identity model decision
-- [x] ProjectMember
-- [x] ProjectRole
-- [x] TaskItem
-- [x] Comment
-- [x] Label
-- [x] Remaining entity relationships
-- [x] Unique constraints
-- [x] Useful indexes
-- [x] Delete behaviors
-- [x] String length configuration
-- [x] Review generated migrations
-- [ ] Inspect database tables manually
+- [ ] Labels API (`LabelsController`)
+  - [ ] Create label
+  - [ ] List labels for project
+  - [ ] Attach label to task
+  - [ ] Remove label from task
+- [ ] Query Features (Search, Filtering by status/assignee, Pagination)
 
 ---
 
-## ⏭️ Next Immediate Lesson
+## ⏭️ Next Immediate Lessons
 
-### User + ProjectMember + ProjectRole
-
-Next tasks:
-
-- [x] Decide how `User` will integrate with ASP.NET Core Identity
-- [x] Create `ProjectMember`
-- [x] Create `ProjectRole`
-- [x] Connect `User` to `ProjectMember`
-- [x] Connect `Project` to `ProjectMember`
-- [x] Configure many-to-many relationship through `ProjectMember`
-- [x] Add unique constraint:
-
-```text
-(ProjectId, UserId)
-```
-
-- [x] Create next migration
-- [x] Apply migration
-- [x] Inspect resulting database schema
-
-Target mental model:
-
-```text
-User
-  │
-  ▼
-ProjectMember
-  │
-  ▼
-Project
-```
+1. **Labels & Task Categorization**
+   - Create Label contract & endpoint (`POST /api/projects/{projectId}/labels`)
+   - List Labels (`GET /api/projects/{projectId}/labels`)
+   - Attach / Detach labels to/from tasks (`POST/DELETE /api/tasks/{taskId}/labels/{labelId}`)
+2. **Task Querying (Filter & Search)**
+   - Filter by `Status`, `AssigneeId`, and search by `Title` keyword
 
 ---
 
 ## ❌ Not Started Yet
 
-### Authentication
-
-- [x] ASP.NET Core Identity integration
-- [ ] Register
-- [ ] Login
-- [ ] Password hashing flow
-- [ ] JWT access token
-- [ ] Refresh token
-- [ ] Logout
-- [ ] Current-user endpoint
-
-### Authorization
-
-- [ ] Project membership checks
-- [ ] Project roles
-- [ ] Resource-level authorization
-- [ ] Owner-only actions
-- [ ] Unauthorized identifier-guessing protection
-
-### Tasks
-
-- [x] TaskItem model
-- [ ] Create task
-- [ ] Get task
-- [ ] List tasks
-- [ ] Update task
-- [ ] Delete task
-- [x] Task status
-- [x] Task assignee
-
-### Comments
-
-- [x] Comment model
-- [ ] Add comment
-- [ ] List comments
-- [ ] Update comment
-- [ ] Delete comment
-
-### Labels
-
-- [x] Label model
-- [ ] Create label
-- [ ] List labels
-- [x] Attach label to task
-- [ ] Remove label from task
-
 ### Query Features
 
-- [ ] Search
-- [ ] Filtering
+- [ ] Search by keyword
+- [ ] Filtering (by status, assignee, priority)
 - [ ] Sorting
-- [ ] Pagination
+- [ ] Pagination (`page`, `pageSize`)
 
 ### Frontend Features
 
 - [ ] Register page
 - [ ] Login page
-- [ ] Dashboard
-- [ ] Workspace UI
-- [ ] Project UI
-- [ ] Project board
-- [ ] Task detail
-- [ ] Comments UI
-- [ ] Labels UI
-- [ ] Search/filter UI
-- [ ] Loading states
-- [ ] Error states
+- [ ] Dashboard / Workspace overview
+- [ ] Project board view (Kanban columns: Todo, In Progress, Done)
+- [ ] Task detail modal/drawer
+- [ ] Comments thread UI
+- [ ] Labels selector & badges UI
+- [ ] Search & filter bar
+- [ ] Responsive loading & error states
 
 ### AI Feature
 
-- [ ] AI task-description endpoint
-- [ ] Structured JSON output
-- [ ] Subtask suggestions
-- [ ] Checklist suggestions
-- [ ] User review/edit/accept flow
+- [ ] AI task-description endpoint (Gemini API integration)
+- [ ] Structured JSON output for subtasks & acceptance criteria
+- [ ] Frontend user review/edit/accept flow
 
-### Testing
+### Automated Testing
 
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Authentication tests
-- [ ] Authorization tests
-- [ ] Validation tests
-- [ ] Identifier-guessing security tests
+- [ ] Unit tests (DTO validation, business rules)
+- [ ] Integration tests (WebApplicationFactory + PostgreSQL Testcontainers)
+- [ ] Authorization / IDOR security test suite
 
 ---
 
@@ -260,34 +236,26 @@ Frontend Next.js setup         ✅ Done
 Tailwind + shadcn/ui           ✅ Done
 EF Core + PostgreSQL           ✅ Done
 AppDbContext                   ✅ Done
-Workspace                      ✅ Done
-Project                        ✅ Done
-Workspace → Project relation   ✅ Done
-Initial migration              ✅ Done
-Database created               ✅ Done
+Domain Entities (All)          ✅ Done
+Authentication (JWT)           ✅ Done
+Projects & Roles API           ✅ Done
+Task CRUD API                  ✅ Done
+Comment CRUD API               ✅ Done
+Permission Matrix Docs         ✅ Done
 
-User / Identity                ✅ Done
-ProjectMember                  ✅ Done
-ProjectRole                    ✅ Done
-TaskItem, Comment, Label       ✅ Done
-
-Authentication                 ❌ Not started
-Authorization                  ❌ Not started
-Task CRUD                      ❌ Not started
-Comments                       ❌ Not started
-Labels                         ❌ Not started
-Frontend features              ❌ Not started
-AI feature                     ❌ Not started
-Testing                        ❌ Not started
+Labels API                     🟡 Next up
+Query Features (Search/Filter) ❌ Not started
+Frontend UI Pages              ❌ Not started
+AI Task Feature                ❌ Not started
+Automated Test Suite           ❌ Not started
 ```
 
 ## Last Known Working State
 
 ```text
-Backend builds successfully.
-Backend runs successfully.
-Database has been created.
-Workspace and Project are persisted through EF Core.
-Frontend project structure exists.
-No blocking issue is currently recorded.
+Backend builds cleanly with 0 errors and 0 warnings.
+Swagger UI exposes Auth, Projects, Tasks, and Comments with JWT Bearer support.
+PostgreSQL database 'team_task_manager' is fully migrated and seeded.
+Resource-level authorization (IDOR defense) and Owner vs Member permissions are fully active.
+Documentation includes comprehensive architecture diagrams, folder guides, and permission matrices.
 ```

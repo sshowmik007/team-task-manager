@@ -98,67 +98,165 @@ public class TasksController : ControllerBase
     }
 
     // =========================================================================
-    // 2. LIST PROJECT TASKS (GET: /api/projects/{projectId}/tasks)
+    // 2. LIST TASKS WITH SEARCH, FILTERING, SORTING & PAGINATION
+    //    (GET: /api/projects/{projectId}/tasks)
+    // =========================================================================
+    // Demonstrates advanced EF Core Deferred Execution:
+    // - Builds an IQueryable pipeline dynamically step-by-step.
+    // - SQL is only compiled and executed when terminal operators (CountAsync, ToListAsync) are called.
+    // - Bounds clamping protects against DoS (e.g. requesting 1,000,000 rows at once).
     // =========================================================================
     [HttpGet("api/projects/{projectId:guid}/tasks")]
-    public async Task<IActionResult> GetTasks(Guid projectId)
+    public async Task<IActionResult> GetTasks(
+        Guid projectId,
+        [FromQuery] TaskQueryRequest request)
     {
-        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        // 1. EXTRACT CALLER IDENTITY FROM JWT:
+        var userIdValue =
+            User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (!Guid.TryParse(userIdValue, out var currentUserId))
         {
             return Unauthorized();
         }
 
-        // 1. PROJECT ACCESS CHECK:
-        // Caller must belong to the project before reading any task data.
-        var isProjectMember = await _dbContext.ProjectMembers
-            .AnyAsync(x =>
-                x.ProjectId == projectId &&
-                x.UserId == currentUserId);
+        // 2. PROJECT ACCESS CHECK:
+        // Caller must be an active project member to query tasks.
+        var isProjectMember =
+            await _dbContext.ProjectMembers
+                .AnyAsync(x =>
+                    x.ProjectId == projectId &&
+                    x.UserId == currentUserId);
 
         if (!isProjectMember)
         {
             return Forbid();
         }
 
-        // 2. EF CORE PROJECTION PIPELINE:
-        // TaskItems -> .Where(...) -> .Select(...) -> .ToListAsync()
-        // - .Where() filters tasks by project in SQL (WHERE "ProjectId" = @projectId)
-        // - .Select() shapes the exact JSON DTO without loading full entity graph or cyclic references
-        // - Includes nested Assignee & CreatedBy details cleanly
-        var tasks = await _dbContext.TaskItems
-            .Where(x => x.ProjectId == projectId)
-            .Select(x => new
-            {
-                x.Id,
-                x.Title,
-                x.Description,
-                x.Status,
-                x.ProjectId,
+        // 3. PAGINATION BOUNDS SANITIZATION:
+        // Prevents zero or negative page offsets, and caps PageSize to 100 to avoid memory exhaustion.
+        if (request.Page < 1)
+        {
+            request.Page = 1;
+        }
 
-                Assignee = x.Assignee == null
-                    ? null
-                    : new
-                    {
-                        x.Assignee.Id,
-                        x.Assignee.DisplayName,
-                        x.Assignee.Email
-                    },
+        if (request.PageSize < 1)
+        {
+            request.PageSize = 10;
+        }
 
-                CreatedBy = new
+        if (request.PageSize > 100)
+        {
+            request.PageSize = 100;
+        }
+
+        // 4. BASE QUERY (DEFERRED EXECUTION):
+        // AsQueryable() allows us to append WHERE and ORDER BY clauses before querying the database.
+        var query =
+            _dbContext.TaskItems
+                .Where(x => x.ProjectId == projectId)
+                .AsQueryable();
+
+        // 5. SEARCH FILTER (KEYWORD IN TITLE OR DESCRIPTION):
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+
+            query = query.Where(x =>
+                x.Title.Contains(search) ||
+                (x.Description != null &&
+                 x.Description.Contains(search)));
+        }
+
+        // 6. STATUS FILTER (NULLABLE ENUM):
+        if (request.Status.HasValue)
+        {
+            query = query.Where(x =>
+                x.Status == request.Status.Value);
+        }
+
+        // 7. ASSIGNEE FILTER:
+        if (request.AssigneeId.HasValue)
+        {
+            query = query.Where(x =>
+                x.AssigneeId == request.AssigneeId.Value);
+        }
+
+        // 8. DYNAMIC SORTING (PATTERN MATCHING SWITCH):
+        query = request.SortBy.ToLower() switch
+        {
+            "title" => request.SortDescending
+                ? query.OrderByDescending(x => x.Title)
+                : query.OrderBy(x => x.Title),
+
+            "status" => request.SortDescending
+                ? query.OrderByDescending(x => x.Status)
+                : query.OrderBy(x => x.Status),
+
+            "modifiedat" => request.SortDescending
+                ? query.OrderByDescending(x => x.ModifiedAt)
+                : query.OrderBy(x => x.ModifiedAt),
+
+            _ => request.SortDescending
+                ? query.OrderByDescending(x => x.CreatedAt)
+                : query.OrderBy(x => x.CreatedAt)
+        };
+
+        // 9. TOTAL COUNT (FOR PAGINATION METADATA):
+        // Executes: SELECT COUNT(*) FROM "TaskItems" WHERE ...
+        var totalCount =
+            await query.CountAsync();
+
+        // 10. PAGINATION (.Skip & .Take) AND SAFE PROJECTION:
+        // .Skip((page - 1) * pageSize): Skips previous pages.
+        // .Take(pageSize): Takes only this page's items.
+        // .Select(...): Shapes the exact JSON response DTO and loads attached Labels & Assignee safely.
+        var tasks =
+            await query
+                .Skip((request.Page - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .Select(x => new
                 {
-                    x.CreatedBy!.Id,
-                    x.CreatedBy.DisplayName,
-                    x.CreatedBy.Email
-                },
+                    x.Id,
+                    x.Title,
+                    x.Description,
+                    x.Status,
+                    x.ProjectId,
+                    x.AssigneeId,
 
-                x.CreatedAt,
-                x.ModifiedAt
-            })
-            .ToListAsync();
+                    Assignee = x.Assignee == null
+                        ? null
+                        : new
+                        {
+                            x.Assignee.Id,
+                            x.Assignee.DisplayName,
+                            x.Assignee.Email
+                        },
 
-        return Ok(tasks);
+                    Labels = x.Labels.Select(label => new
+                    {
+                        label.Id,
+                        label.Name
+                    }),
+
+                    x.CreatedById,
+                    x.CreatedAt,
+                    x.ModifiedAt
+                })
+                .ToListAsync();
+
+        // 11. ENVELOPE RESPONSE WITH PAGINATION METADATA:
+        return Ok(new
+        {
+            Page = request.Page,
+            PageSize = request.PageSize,
+            TotalCount = totalCount,
+
+            TotalPages = (int)Math.Ceiling(
+                totalCount / (double)request.PageSize),
+
+            Items = tasks
+        });
     }
 
     // =========================================================================

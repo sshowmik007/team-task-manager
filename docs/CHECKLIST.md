@@ -8,8 +8,8 @@
 - **Project:** Team Task Manager / Mini Jira
 - **Current Phase:** Phase 2 — Core Domain APIs & Resource-Level Authorization
 - **Status:** In Progress
-- **Last Completed Lesson:** Label CRUD + Attach/Remove Labels from Tasks (Owner-only taxonomy + Member tagging)
-- **Next Lesson:** Task Querying (Filtering, Searching & Pagination) OR AI Task Assistant
+- **Last Completed Lesson:** Task Search + Filtering + Sorting + Pagination (Deferred execution query pipeline)
+- **Next Lesson:** Backend Refactoring / Helper Services (CurrentUser & Membership) OR AI Task Assistant
 
 ---
 
@@ -166,6 +166,21 @@
 - [x] Remove label from task (`DELETE /api/tasks/{taskId}/labels/{labelId}`)
   - Any project member can detach labels from tasks
 
+### Task Querying API (Search, Filter, Sort & Pagination)
+
+- [x] Create query contract (`Contracts/Tasks/TaskQueryRequest.cs`)
+  - Substring search (`Search` in Title or Description)
+  - Nullable enum filter (`Status`)
+  - Assignee filter (`AssigneeId`)
+  - Dynamic sort (`SortBy`: "createdAt", "modifiedAt", "title", "status") & direction (`SortDescending`)
+  - Clamped pagination (`Page`, `PageSize` max 100)
+- [x] Advanced EF Core query pipeline (`GET /api/projects/{projectId}/tasks`)
+  - Deferred execution with `AsQueryable()`
+  - Total count query (`CountAsync()`)
+  - Offset pagination with `.Skip(...)` and `.Take(...)`
+  - Safe projection including attached labels and assignee details
+  - Response envelope (`Page`, `PageSize`, `TotalCount`, `TotalPages`, `Items`)
+
 ### Problems Solved
 
 - [x] Fixed EF migration command/project-path issue
@@ -175,6 +190,7 @@
 - [x] Fixed misplaced OpenApi `using` directive in `Program.cs`
 - [x] Fixed DbContext naming reference to `AppDbContext` across all controllers
 - [x] Seeded default `Workspace` record into PostgreSQL to resolve `404 Workspace not found` during project creation
+- [x] Fixed Swagger 500 error (`Fetch error /swagger/v1/swagger.json`) caused by duplicate `GetTasks` route registration in `TasksController.cs`
 - [x] Rebuilt and verified full solution compilation with 0 warnings and 0 errors
 
 ---
@@ -190,20 +206,21 @@ Completed inside Phase 2:
 - [x] Task CRUD API (`TasksController`)
 - [x] Comment CRUD API (`CommentsController`)
 - [x] Labels & Task Tagging API (`LabelsController`)
+- [x] Task Querying & Pagination (`TaskQueryRequest`)
 - [x] Permission Matrix & Security Documentation (`docs/permission-matrix.md`)
 
 Still required for Phase 2:
 
-- [ ] Query Features (Search, Filtering by status/assignee, Pagination)
+- [ ] Clean up / refactoring: reusable current user & membership helpers
+- [ ] AI Task Assistant (Gemini API integration)
 
 ---
 
 ## ⏭️ Next Immediate Lessons
 
-1. **Task Querying (Filter, Search & Pagination)**
-   - Filter by `Status`, `AssigneeId`
-   - Search by `Title` keyword
-   - Pagination parameters (`page`, `pageSize`)
+1. **Backend Refactoring & Helper Services**
+   - Extract repeated JWT `ClaimTypes.NameIdentifier` parsing into a helper/service
+   - Reusable project membership verification
 2. **AI Task Assistant**
    - Integrate Gemini API for task breakdowns & checklists
 
@@ -259,9 +276,10 @@ Projects & Roles API           ✅ Done
 Task CRUD API                  ✅ Done
 Comment CRUD API               ✅ Done
 Labels & Tagging API           ✅ Done
+Task Search & Pagination       ✅ Done
 Permission Matrix Docs         ✅ Done
 
-Query Features (Search/Filter) 🟡 Next up
+Backend Refactoring            🟡 Next up
 Frontend UI Pages              ❌ Not started
 AI Task Feature                ❌ Not started
 Automated Test Suite           ❌ Not started
